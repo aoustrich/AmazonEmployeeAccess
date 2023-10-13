@@ -1,7 +1,7 @@
 library(tidymodels)
 library(tidyverse)
 library(vroom)
-library(ggmosaic)
+# library(ggmosaic)
 library(glmnet)
 library(parallel)
 library(embed) #used for target encoding
