@@ -66,6 +66,28 @@ The following object is masked from ‘package:scales’:
 
     col_factor
 
-> library(ggmosaic)
-Error in library(ggmosaic) : there is no package called ‘ggmosaic’
+> #library(ggmosaic)
+> library(glmnet)
+Loading required package: Matrix
+
+Attaching package: ‘Matrix’
+
+The following objects are masked from ‘package:tidyr’:
+
+    expand, pack, unpack
+
+Loaded glmnet 4.1-8
+> library(parallel)
+> library(embed) #used for target encoding
+> 
+> train <- vroom("./train.csv")
+Rows: 32769 Columns: 10
+── Column specification ────────────────────────────────────────────────────────
+Delimiter: ","
+dbl (10): ACTION, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTN...
+
+ℹ Use `spec()` to retrieve the full column specification for this data.
+ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+> test <- vroom("./test.csv")
+Error: './test.csv' does not exist in current working directory ('/home/aoust16/Kaggle/AmazonEmployeeAccess').
 Execution halted
