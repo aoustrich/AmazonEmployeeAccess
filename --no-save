@@ -32,7 +32,7 @@ Type 'q()' to quit R.
 ✖ dplyr::filter()  masks stats::filter()
 ✖ dplyr::lag()     masks stats::lag()
 ✖ recipes::step()  masks stats::step()
-• Use tidymodels_prefer() to resolve common conflicts.
+• Dig deeper into tidy modeling with R at https://www.tmwr.org
 > library(tidyverse)
 ── Attaching core tidyverse packages ──────────────────────── tidyverse 2.0.0 ──
 ✔ forcats   1.0.0     ✔ readr     2.1.4
@@ -80,8 +80,8 @@ Loaded glmnet 4.1-8
 > library(parallel)
 > library(embed) #used for target encoding
 > 
-> #workingdirectory <- getwd()
-> #setwd(workingdirectory)
+> workingdirectory <- getwd()
+> setwd(workingdirectory)
 > 
 > train <- vroom("train.csv")
 Rows: 32769 Columns: 10

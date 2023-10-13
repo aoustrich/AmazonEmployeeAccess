@@ -6,8 +6,8 @@ library(glmnet)
 library(parallel)
 library(embed) #used for target encoding
 
-workingdirectory <- getwd()
-setwd(workingdirectory)
+#workingdirectory <- getwd()
+#setwd(workingdirectory)
 
 train <- vroom("train.csv")
 test <- vroom("test.csv")
