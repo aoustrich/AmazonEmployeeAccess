@@ -92,5 +92,107 @@ dbl (10): ACTION, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTN...
 ℹ Use `spec()` to retrieve the full column specification for this data.
 ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
 > test <- vroom("test.csv")
-Error: 'test.csv' does not exist in current working directory ('/home/aoust16/Kaggle/AmazonEmployeeAccess').
-Execution halted
+Rows: 58921 Columns: 10
+── Column specification ────────────────────────────────────────────────────────
+Delimiter: ","
+dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
+
+ℹ Use `spec()` to retrieve the full column specification for this data.
+ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+> 
+> train$ACTION <- as.factor(train$ACTION)
+> 
+> # recipe
+> recipe <- recipe(ACTION ~ ., data = train) %>% 
++   step_mutate_at(all_numeric_predictors(), fn = factor) %>% 
++   step_other(all_nominal_predictors(), threshold = .01) %>% 
++   step_dummy(all_nominal_predictors())
+>   # step_lencode_mixed(all_nominal_predictors(), outcome=vars(ACTION))
+> 
+> prepped <- prep(recipe)
+> bakedSet <- bake(prepped, new_data = train)
+> 
+> # EDA
+> # ggplot(data=train) + geom_mosaic(aes(x=product(MGR_ID), fill=ACTION))
+> 
+> # Make function to predict and export
+> predict_export <- function(workflowName, fileName){
++   # make predictions and prep data for Kaggle format
++   
++   preds <- workflowName %>%
++     predict(new_data = test, type="prob")
++   
++   submission <- preds %>% 
++     mutate(id=row_number()) %>% 
++     rename(Action = .pred_1) %>% 
++     select(3,2)
++   
++   directory = "./submissions/"
++   path = paste0(directory,fileName)
++   
++   vroom_write(submission, file = path, delim=',')
++ 
++ 
++ }
+> 
+> # Logistic Regression -----------------------------------------------------
+> logisticMod <- logistic_reg() %>% #Type of mode
++   set_engine("glm")
+> 
+> logistic_workflow <- workflow() %>%
++   add_recipe(recipe) %>%
++   add_model(logisticMod) %>%
++   fit(data = train) # Fit the workflow
+> 
+> amazon_predictions <- predict(logistic_workflow,
++                               new_data=test,
++                               type="prob") # "class" or "prob" (see doc) %>% 
+Warning message:
+In predict.lm(object, newdata, se.fit, scale = 1, type = if (type ==  :
+  prediction from rank-deficient fit; attr(*, "non-estim") has doubtful cases
+> 
+> submission <- amazon_predictions %>% 
++             mutate(id=row_number()) %>% 
++               rename(Action = .pred_1) %>% 
++               select(3,2)
+> vroom_write(submission, file = "submission1.csv", delim=',')
+> 
+> 
+> # Penalized Logistic Regression -------------------------------------------
+> # make a new recipe to do target encoding
+> recipe.t <- recipe(ACTION ~ ., data = train) %>% 
++   step_mutate_at(all_numeric_predictors(), fn = factor) %>% 
++   step_other(all_nominal_predictors(), threshold = .001) %>% 
++   step_lencode_mixed(all_nominal_predictors(), outcome=vars(ACTION))
+> 
+> ## Parallel
+> doParallel::registerDoParallel(4)
+> 
+> ## Prep and Bake
+> prepped.t <- prep(recipe.t)
+> bakedSet <- bake(prepped.t, new_data = train)
+> 
+> penalizedMod <- logistic_reg(mixture=tune(), penalty=tune()) %>% #Type of model
++   set_engine("glmnet")
+> 
+> penalizedWF <- workflow() %>%
++   add_recipe(recipe.t) %>%
++   add_model(penalizedMod)
+> 
+> ## Grid of values to tune over
+> tuning_grid <- grid_regular(penalty(),
++                             mixture(),
++                             levels = 15) ## L^2 total tuning possibilities
+> 
+> ## Split data for CV
+> folds <- vfold_cv(train, v = 15, repeats=1)
+> 
+> 
+> ## Parallel
+> doParallel::registerDoParallel(4)
+> 
+> ## Run the CV ~ about 3 minutes
+> penalizedCV_results <- penalizedWF %>%
++     tune_grid(resamples=folds,
++             grid=tuning_grid,
++             metrics=metric_set(roc_auc))
