@@ -9,8 +9,8 @@ library(embed) #used for target encoding
 workingdirectory <- getwd()
 setwd(workingdirectory)
 
-train <- vroom("./train.csv")
-test <- vroom("./test.csv")
+train <- vroom("train.csv")
+test <- vroom("test.csv")
 
 train$ACTION <- as.factor(train$ACTION)
 
