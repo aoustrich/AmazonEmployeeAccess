@@ -5,6 +5,8 @@ library(vroom)
 library(glmnet)
 library(parallel)
 library(embed) #used for target encoding
+library(discrim) # for naive bayes engine
+library(naivebayes) # naive bayes
 
 #workingdirectory <- getwd()
 #setwd(workingdirectory)
@@ -67,6 +69,7 @@ submission <- amazon_predictions %>%
 vroom_write(submission, file = "submission1.csv", delim=',')
 
 
+
 # Penalized Logistic Regression -------------------------------------------
 # make a new recipe to do target encoding
 recipe.t <- recipe(ACTION ~ ., data = train) %>% 
@@ -118,5 +121,56 @@ final_wf <-
 
 ## Predict
 predict_export(final_wf,"penalized2.csv")
+
+
+
+
+# Decision Trees and Forests ----------------------------------------------
+
+# still to do
+
+
+
+# Naive Bayes -------------------------------------------------------------
+naiveModel <- naive_Bayes(Laplace=tune(), smoothness=tune()) %>%
+  set_mode("classification") %>%
+  set_engine("naivebayes") # install discrim library for the naivebayes eng
+
+naiveWF <- workflow() %>%
+  add_recipe(recipe.t) %>%
+  add_model(naiveModel)
+
+## Tune smoothness and Laplace here
+## Grid of values to tune over
+tuning_grid <- grid_regular(Laplace(),
+                            smoothness(),
+                            levels = 10) ## L^2 total tuning possibilities
+
+## Split data for CV
+folds <- vfold_cv(train, v = 15, repeats=1)
+
+## Parallel
+doParallel::registerDoParallel(4)
+
+## Run the CV ~ about 3 minutes
+naiveBayes_CV_results <- naiveWF %>%
+  tune_grid(resamples=folds,
+            grid=tuning_grid,
+            metrics=metric_set(roc_auc))
+
+## Find Best Tuning Parameters
+naiveBestTune <- naiveBayes_CV_results %>%
+  select_best("roc_auc")
+
+## Finalize the Workflow & fit it
+naiveFinalWF <-
+  naiveWF %>%
+  finalize_workflow(naiveBestTune) %>%
+  fit(data=train)
+
+## Predict
+predict_export(naiveFinalWF,"naiveBayes.csv")
+
+
 
 
