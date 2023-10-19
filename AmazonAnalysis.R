@@ -147,12 +147,12 @@ tuning_grid <- grid_regular(Laplace(),
                             levels = 10) ## L^2 total tuning possibilities
 
 ## Split data for CV
-folds <- vfold_cv(train, v = 15, repeats=1)
+folds <- vfold_cv(train, v = 5, repeats=1)
 
 ## Parallel
 doParallel::registerDoParallel(4)
 
-## Run the CV ~ about 3 minutes
+## Run the CV ~ about 2.5 minutes
 naiveBayes_CV_results <- naiveWF %>%
   tune_grid(resamples=folds,
             grid=tuning_grid,
