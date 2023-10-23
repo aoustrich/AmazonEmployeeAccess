@@ -36,7 +36,7 @@ num_cores <- as.numeric(parallel::detectCores())#How many cores do I have?
 if (num_cores > 4)
   num_cores = 10
 cl <- makePSOCKcluster(num_cores)
-registerDoParallel(cl)
+doParallel::registerDoParallel(cl)
 
 recipe.pca <- recipe(ACTION ~ ., data = train) %>% 
   step_mutate_at(all_numeric_predictors(), fn = factor) %>% 
@@ -89,7 +89,7 @@ naiveFinalWFPCA <-
   fit(data=train)
 
 ## Predict
-predict_export(naiveFinalWFPCA,"naiveBayesPCA.csv")
+predict_export(naiveFinalWFPCA,"naiveBayesPCA2.csv")
 
 
 stopCluster(cl)
