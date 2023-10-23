@@ -7,6 +7,7 @@ library(parallel)
 library(embed) #used for target encoding
 library(discrim) # for naive bayes engine
 library(naivebayes) # naive bayes
+library(kknn)
 
 #workingdirectory <- getwd()
 #setwd(workingdirectory)
@@ -25,6 +26,20 @@ recipe <- recipe(ACTION ~ ., data = train) %>%
 
 prepped <- prep(recipe)
 bakedSet <- bake(prepped, new_data = train)
+
+# make a new recipe to do target encoding
+recipe.t <- recipe(ACTION ~ ., data = train) %>% 
+  step_mutate_at(all_numeric_predictors(), fn = factor) %>% 
+  step_other(all_nominal_predictors(), threshold = .001) %>% 
+  step_lencode_mixed(all_nominal_predictors(), outcome=vars(ACTION)) %>% 
+  step_normalize(all_numeric_predictors())
+
+
+## Parallel
+doParallel::registerDoParallel(4)
+## Prep and Bake
+prepped.t <- prep(recipe.t)
+bakedSet <- bake(prepped.t, new_data = train)
 
 # EDA
 # ggplot(data=train) + geom_mosaic(aes(x=product(MGR_ID), fill=ACTION))
@@ -71,18 +86,8 @@ vroom_write(submission, file = "submission1.csv", delim=',')
 
 
 # Penalized Logistic Regression -------------------------------------------
-# make a new recipe to do target encoding
-recipe.t <- recipe(ACTION ~ ., data = train) %>% 
-  step_mutate_at(all_numeric_predictors(), fn = factor) %>% 
-  step_other(all_nominal_predictors(), threshold = .001) %>% 
-  step_lencode_mixed(all_nominal_predictors(), outcome=vars(ACTION))
-
 ## Parallel
 doParallel::registerDoParallel(4)
-
-## Prep and Bake
-prepped.t <- prep(recipe.t)
-bakedSet <- bake(prepped.t, new_data = train)
 
 penalizedMod <- logistic_reg(mixture=tune(), penalty=tune()) %>% #Type of model
   set_engine("glmnet")
@@ -172,5 +177,105 @@ naiveFinalWF <-
 predict_export(naiveFinalWF,"naiveBayes.csv")
 
 
+# KNN ---------------------------------------------------------------------
 
+## Set up model
+knn_model <- nearest_neighbor(neighbors=tune()) %>% 
+  set_mode("classification") %>%
+  set_engine("kknn")
 
+knn_wf <- workflow() %>%
+  add_recipe(recipe.t) %>%
+  add_model(knn_model)
+
+## set up grid of tuning values
+knn_tuning_grid <- grid_regular(neighbors(),
+                                levels = 10)
+
+## set up k-fold CV
+knn_folds <- vfold_cv(train, v = 10, repeats=1)
+
+## Parallel
+doParallel::registerDoParallel(4)
+
+## Run the CV - about 3.5 minutes
+knn_CVresults <- knn_wf %>%
+  tune_grid(resamples=knn_folds,
+            grid=knn_tuning_grid,
+            metrics=metric_set(roc_auc)) 
+
+## find best tuning parameters
+KNNbestTune <- knn_CVresults %>%
+  select_best("roc_auc")
+
+## Finalize workflow  
+finalKNN_wf <- knn_wf %>%
+  finalize_workflow(KNNbestTune) %>%
+  fit(data=train)
+
+## Predict
+predict_export(finalKNN_wf,"knn.csv")
+
+# PCA ---------------------------------------------------------------------
+
+# Make a new recipe that uses PCA
+
+recipe.pca <- recipe(ACTION ~ ., data = train) %>% 
+  step_mutate_at(all_numeric_predictors(), fn = factor) %>% 
+  step_other(all_nominal_predictors(), threshold = .001) %>% 
+  step_lencode_mixed(all_nominal_predictors(), outcome=vars(ACTION)) %>% 
+  step_normalize(all_numeric_predictors()) %>% 
+  step_pca(all_predictors(), threshold = 0.85) # threshold is kind of like the R^2 of the components
+
+# recipe.pca <- recipe(ACTION ~ ., data = train) %>% 
+#   step_mutate_at(all_numeric_predictors(), fn = factor) %>% 
+#   step_other(all_nominal_predictors(), threshold = .01) %>% 
+#   step_dummy(all_nominal_predictors()) %>% 
+#   step_normalize(all_predictors()) %>% 
+#   step_pca(all_predictors(), threshold = 0.85) # threshold is kind of like the R^2 of the components
+
+## Parallel to prep and bake recipe
+doParallel::registerDoParallel(4)
+prepped.pca <- prep(recipe.pca)
+bakedSetPCA <- bake(prepped.pca, new_data = train)
+  # with threshold=0.85 we have 50 variables which seems like a good amount
+
+#### Re run the Naive Bayes model with the new recipe
+naiveModelPCA <- naive_Bayes(Laplace=tune(), smoothness=tune()) %>%
+  set_mode("classification") %>%
+  set_engine("naivebayes") # install discrim library for the naivebayes eng
+
+naivePCA_WF <- workflow() %>%
+  add_recipe(recipe.pca) %>%
+  add_model(naiveModelPCA)
+
+## Tune smoothness and Laplace here
+## Grid of values to tune over
+tuning_grid <- grid_regular(Laplace(),
+                            smoothness(),
+                            levels = 10) ## L^2 total tuning possibilities
+
+## Split data for CV
+folds <- vfold_cv(train, v = 5, repeats=1)
+
+## Parallel
+doParallel::registerDoParallel(4)
+
+## Run the CV ~ about 3.5 minutes
+naiveBayes_CV_resultsPCA <- naivePCA_WF %>%
+  tune_grid(resamples=folds,
+            grid=tuning_grid,
+            metrics=metric_set(roc_auc))
+
+## Find Best Tuning Parameters
+naiveBestTunePCA <- naiveBayes_CV_resultsPCA %>%
+  select_best("roc_auc")
+
+## Finalize the Workflow & fit it
+naiveFinalWFPCA <-
+  naivePCA_WF %>%
+  finalize_workflow(naiveBestTunePCA) %>%
+  fit(data=train)
+
+## Predict
+predict_export(naiveFinalWFPCA,"naiveBayesPCA.csv")
