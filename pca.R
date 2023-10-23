@@ -46,7 +46,7 @@ recipe.pca <- recipe(ACTION ~ ., data = train) %>%
   step_pca(all_predictors(), threshold = 0.95) # threshold is kind of like the R^2 of the components
 
 ## Parallel to prep and bake recipe
-doParallel::registerDoParallel(4)
+
 prepped.pca <- prep(recipe.pca)
 bakedSetPCA <- bake(prepped.pca, new_data = train)
 
@@ -70,7 +70,7 @@ tuning_grid <- grid_regular(Laplace(),
 folds <- vfold_cv(train, v = 5, repeats=1)
 
 ## Parallel
-doParallel::registerDoParallel(4)
+
 
 ## Run the CV ~ about 3.5 minutes
 naiveBayes_CV_resultsPCA <- naivePCA_WF %>%
