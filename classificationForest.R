@@ -81,7 +81,7 @@ randForestModel <- rand_forest(mtry = tune(),
 
 forestWF <- workflow() %>% 
   # add_recipe(recipe.b) %>%
-  add_recipe(recipe.t)
+  add_recipe(recipe.t) %>% 
   add_model(randForestModel)
 
 # create tuning grid
