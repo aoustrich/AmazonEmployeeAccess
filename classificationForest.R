@@ -8,6 +8,8 @@ library(ranger)
 library(doParallel)
 library(rstanarm)
 
+startTime <- proc.time()
+
 train <- vroom("train.csv")
 test <- vroom("test.csv")
 
@@ -27,9 +29,12 @@ doParallel::registerDoParallel(cl)
 
 
 ## Prep and Bake
+prepStart <- proc.time()
 prepped.b <- prep(recipe.b)
 bakedSetB <- bake(prepped.b, new_data = train)
 
+print("Time to bake:")
+proc.time()-prepStart
 
 # Make function to predict and export
 predict_export <- function(workflowName, fileName){
@@ -69,13 +74,18 @@ forest_tuning_grid <- grid_regular(mtry(range = c(1,(ncol(bakedSetB)-1))),
                                    levels = 100)
 
 # split data for cross validation
-rfolds <- vfold_cv(train, v = 20, repeats=1)
+rfolds <- vfold_cv(train, v = , repeats=1)
+
+cvStart <- proc.time()
 
 # run cross validation
 treeCVResults <- forestWF %>% 
   tune_grid(resamples = rfolds,
             grid = forest_tuning_grid,
             metrics=metric_set(roc_auc)) 
+
+print("CV time:")
+proc.time()-cvStart
 
 # select best model
 best_tuneForest <- treeCVResults %>% 
@@ -91,3 +101,6 @@ finalForestWF <-
 predict_export(finalForestWF,"ClassificationForest.csv")
 
 stopCluster(cl)
+
+print("total time: ")
+proc.time()-startTime
