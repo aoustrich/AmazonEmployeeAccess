@@ -15,11 +15,21 @@ test <- vroom("test.csv")
 
 train$ACTION <- as.factor(train$ACTION)
 
-recipe.b <- recipe(ACTION ~ ., data = train) %>% 
+# recipe.b <- recipe(ACTION ~ ., data = train) %>% 
+#   step_mutate_at(all_numeric_predictors(), fn = factor) %>% 
+#   step_other(all_nominal_predictors(), threshold = .001) %>% 
+#   step_lencode_bayes(all_nominal_predictors(), outcome=vars(ACTION)) %>%
+#   step_normalize(all_numeric_predictors())
+
+# make a new recipe to do target encoding
+recipe.t <- recipe(ACTION ~ ., data = train) %>% 
   step_mutate_at(all_numeric_predictors(), fn = factor) %>% 
   step_other(all_nominal_predictors(), threshold = .001) %>% 
-  step_lencode_bayes(all_nominal_predictors(), outcome=vars(ACTION)) %>% 
+  step_lencode_mixed(all_nominal_predictors(), outcome=vars(ACTION)) %>% 
   step_normalize(all_numeric_predictors())
+
+
+
 
 num_cores <- as.numeric(parallel::detectCores())#How many cores do I have?
 if (num_cores > 4)
@@ -30,8 +40,13 @@ doParallel::registerDoParallel(cl)
 
 ## Prep and Bake
 prepStart <- proc.time()
-prepped.b <- prep(recipe.b)
-bakedSetB <- bake(prepped.b, new_data = train)
+# prepped.b <- prep(recipe.b)
+# bakedSetB <- bake(prepped.b, new_data = train)
+
+## Prep and Bake
+prepped.t <- prep(recipe.t)
+bakedSet <- bake(prepped.t, new_data = train)
+
 
 print("Time to bake:")
 proc.time()-prepStart
@@ -65,11 +80,12 @@ randForestModel <- rand_forest(mtry = tune(),
   set_mode("classification")
 
 forestWF <- workflow() %>% 
-  add_recipe(recipe.b) %>%
+  # add_recipe(recipe.b) %>%
+  add_recipe(recipe.t)
   add_model(randForestModel)
 
 # create tuning grid
-forest_tuning_grid <- grid_regular(mtry(range = c(1,(ncol(bakedSetB)-1))),
+forest_tuning_grid <- grid_regular(mtry(range = c(1,(ncol(bakedSet)-1))),
                                    min_n(),
                                    levels = 100)
 
