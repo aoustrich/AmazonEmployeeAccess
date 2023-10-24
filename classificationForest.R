@@ -74,7 +74,7 @@ forest_tuning_grid <- grid_regular(mtry(range = c(1,(ncol(bakedSetB)-1))),
                                    levels = 100)
 
 # split data for cross validation
-rfolds <- vfold_cv(train, v = , repeats=1)
+rfolds <- vfold_cv(train, v = 20, repeats=1)
 
 cvStart <- proc.time()
 
