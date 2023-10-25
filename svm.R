@@ -3,6 +3,7 @@ library(tidyverse)
 library(vroom)
 library(embed)
 library(kernlab)
+library(parallel)
 
 
 # Read in Data and prep export function ----------------------------------
@@ -38,8 +39,8 @@ recipe.pca <- recipe(ACTION ~ ., data = train) %>%
   step_pca(all_predictors(), threshold = 0.85) 
 
 num_cores <- as.numeric(parallel::detectCores())#How many cores do I have?
-if (num_cores > 4)
-  num_cores = 10
+if (num_cores > 4){
+  num_cores = 10}
 cl <- makePSOCKcluster(num_cores)
 doParallel::registerDoParallel(cl)
 
