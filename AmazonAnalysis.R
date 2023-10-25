@@ -8,6 +8,7 @@ library(embed) #used for target encoding
 library(discrim) # for naive bayes engine
 library(naivebayes) # naive bayes
 library(kknn)
+library(kernlab) #for svm
 
 #workingdirectory <- getwd()
 #setwd(workingdirectory)
@@ -17,12 +18,15 @@ test <- vroom("test.csv")
 
 train$ACTION <- as.factor(train$ACTION)
 
+
+
+# Recipes -----------------------------------------------------------------
 # recipe
 recipe <- recipe(ACTION ~ ., data = train) %>% 
   step_mutate_at(all_numeric_predictors(), fn = factor) %>% 
   step_other(all_nominal_predictors(), threshold = .01) %>% 
   step_dummy(all_nominal_predictors())
-  # step_lencode_mixed(all_nominal_predictors(), outcome=vars(ACTION))
+# step_lencode_mixed(all_nominal_predictors(), outcome=vars(ACTION))
 
 prepped <- prep(recipe)
 bakedSet <- bake(prepped, new_data = train)
@@ -40,6 +44,21 @@ doParallel::registerDoParallel(4)
 ## Prep and Bake
 prepped.t <- prep(recipe.t)
 bakedSet <- bake(prepped.t, new_data = train)
+
+# Make a new recipe that uses PCA
+
+recipe.pca <- recipe(ACTION ~ ., data = train) %>% 
+  step_mutate_at(all_numeric_predictors(), fn = factor) %>% 
+  step_other(all_nominal_predictors(), threshold = .001) %>% 
+  step_lencode_mixed(all_nominal_predictors(), outcome=vars(ACTION)) %>% 
+  step_normalize(all_numeric_predictors()) %>% 
+  step_pca(all_predictors(), threshold = 0.85) # threshold is kind of like the R^2 of the components
+
+## Parallel to prep and bake recipe
+doParallel::registerDoParallel(4)
+prepped.pca <- prep(recipe.pca)
+bakedSetPCA <- bake(prepped.pca, new_data = train)
+# with threshold=0.85 we have 50 variables which seems like a good amount
 
 # EDA
 # ggplot(data=train) + geom_mosaic(aes(x=product(MGR_ID), fill=ACTION))
@@ -218,28 +237,6 @@ predict_export(finalKNN_wf,"knn.csv")
 
 # PCA ---------------------------------------------------------------------
 
-# Make a new recipe that uses PCA
-
-recipe.pca <- recipe(ACTION ~ ., data = train) %>% 
-  step_mutate_at(all_numeric_predictors(), fn = factor) %>% 
-  step_other(all_nominal_predictors(), threshold = .001) %>% 
-  step_lencode_mixed(all_nominal_predictors(), outcome=vars(ACTION)) %>% 
-  step_normalize(all_numeric_predictors()) %>% 
-  step_pca(all_predictors(), threshold = 0.85) # threshold is kind of like the R^2 of the components
-
-# recipe.pca <- recipe(ACTION ~ ., data = train) %>% 
-#   step_mutate_at(all_numeric_predictors(), fn = factor) %>% 
-#   step_other(all_nominal_predictors(), threshold = .01) %>% 
-#   step_dummy(all_nominal_predictors()) %>% 
-#   step_normalize(all_predictors()) %>% 
-#   step_pca(all_predictors(), threshold = 0.85) # threshold is kind of like the R^2 of the components
-
-## Parallel to prep and bake recipe
-doParallel::registerDoParallel(4)
-prepped.pca <- prep(recipe.pca)
-bakedSetPCA <- bake(prepped.pca, new_data = train)
-  # with threshold=0.85 we have 50 variables which seems like a good amount
-
 #### Re run the Naive Bayes model with the new recipe
 naiveModelPCA <- naive_Bayes(Laplace=tune(), smoothness=tune()) %>%
   set_mode("classification") %>%
@@ -279,3 +276,56 @@ naiveFinalWFPCA <-
 
 ## Predict
 predict_export(naiveFinalWFPCA,"naiveBayesPCA.csv")
+
+
+# SVM ---------------------------------------------------------------------
+# Build models - Running Radial Only
+
+# svmPoly <- svm_poly(degree=tune(), cost=tune()) %>% # set or tune
+#   set_mode("classification") %>%
+# set_engine("kernlab")
+
+svmRadial <- svm_rbf(rbf_sigma=tune(), cost=tune()) %>% # set or tune
+  set_mode("classification") %>%
+set_engine("kernlab")
+
+# svmLinear <- svm_linear(cost=tune()) %>% # set or tune
+#   set_mode("classification") %>%
+# set_engine("kernlab")
+
+# Create Workflow
+svmRadialWF <- workflow() %>% 
+  add_recipe(recipe.pca) %>% 
+  add_model(svmRadial)
+
+# Create tuning grid and folds
+svmRadialGrid <- grid_regular(rbf_sigma(),
+                             cost(),
+                             levels = 10)
+svmFolds <- vfold_cv(train, v=5,repeats=1)
+
+doParallel::registerDoParallel(4)
+# Run the CV ~ about  minutes
+svmCVstart <- proc.time()
+svmRadial_CVresults <- svmRadialWF %>%
+  tune_grid(resamples=svmFolds,
+            grid=svmRadialGrid,
+            metrics=metric_set(roc_auc))
+proc.time()-svmCVstart
+
+# select the best tune
+svmRadialBestTune <- svmRadial_CVresults %>% 
+  select_best("roc_auc")
+
+# finalize workflow and fit
+svmRadiaFinal <- svmRadialWF %>% 
+  finalize_workflow(svmRadialBestTune) %>% 
+  fit(train)
+
+# 
+
+
+
+
+
+
