@@ -47,8 +47,12 @@ doParallel::registerDoParallel(cl)
 prepped.pca <- prep(recipe.pca)
 bakedSetPCA <- bake(prepped.pca, new_data = train)
 
-stopCluster(cl)
-
+# unregister_dopar <- function() {
+#   env <- foreach:::.foreachGlobals
+#   rm(list=ls(name=env), pos=env)
+# }
+# 
+# unregister_dopar()
 
 # Build Model and Workflow -----------------------------------------------
 
@@ -68,10 +72,16 @@ svmFolds <- vfold_cv(train, v=5, repeats=1)
 
 ## Run cross validation
 svmCVstart <- proc.time()
+# svmCVresults <- svmWF %>%
+#   tune_grid(resamples=svmFolds,
+#             grid=svmGrid,
+#             metrics=metric_set(roc_auc))
+
 svmCVresults <- svmWF %>%
   tune_grid(resamples=svmFolds,
             grid=svmGrid,
             metrics=metric_set(roc_auc))
+
 proc.time()-svmCVstart
 
 
@@ -90,3 +100,4 @@ svmFinal <- svmWF %>%
 # Export Data -------------------------------------------------------------
 predict_export(svmFinal,"svmLinear.csv")
 
+stopCluster(cl)
