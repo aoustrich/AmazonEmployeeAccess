@@ -3,7 +3,7 @@ library(tidyverse)
 library(vroom)
 # library(ggmosaic)
 library(glmnet)
-# library(parallel)
+library(parallel)
 library(embed) #used for target encoding
 library(discrim) # for naive bayes engine
 library(naivebayes) # naive bayes
@@ -61,6 +61,14 @@ scriptStart <- proc.time()
 # bakedSetPCA <- bake(prepped.pca, new_data = train)
 # # with threshold=0.85 we have 50 variables which seems like a good amount
 # 
+
+
+
+num_cores <- as.numeric(parallel::detectCores())#How many cores do I have?
+if (num_cores > 4)
+  num_cores = 20
+cl <- makePSOCKcluster(num_cores)
+doParallel::registerDoParallel(cl)
 
 ## Balanced recipe
 recipe.bal<- recipe(ACTION ~ ., data = train) %>% 
@@ -417,3 +425,4 @@ proc.time()- scriptStart
 
 
 
+stopCluster(cl)
