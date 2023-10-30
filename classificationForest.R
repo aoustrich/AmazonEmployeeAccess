@@ -25,20 +25,22 @@ train$ACTION <- as.factor(train$ACTION)
 # make a new recipe to do target encoding
 recipe.t <- recipe(ACTION ~ ., data = train) %>% 
   step_mutate_at(all_numeric_predictors(), fn = factor) %>% 
-  step_other(all_nominal_predictors(), threshold = .001) %>% 
+  # step_other(all_nominal_predictors(), threshold = .001) %>% 
   step_lencode_mixed(all_nominal_predictors(), outcome=vars(ACTION)) %>% 
-  step_normalize(all_numeric_predictors()) %>%
-  step_pca(all_predictors(), threshold = 0.85) %>% 
+  step_normalize(all_numeric_predictors()) %>% 
+  step_pca(all_predictors(), threshold = 0.8) %>%
   step_smote(all_outcomes(), neighbors=5)
 
 
 
 
-num_cores <- as.numeric(parallel::detectCores())#How many cores do I have?
-if (num_cores > 4)
-  num_cores = 20
+# num_cores <- as.numeric(parallel::detectCores())#How many cores do I have?
+# if (num_cores > 4)
+#   num_cores = 20
 cl <- makePSOCKcluster(num_cores)
+cl <- makePSOCKcluster(1)
 doParallel::registerDoParallel(cl)
+
 
 
 ## Prep and Bake
@@ -78,7 +80,7 @@ predict_export <- function(workflowName, fileName){
 # Classification Forest ---------------------------------------------------
 randForestModel <- rand_forest(mtry = tune(),
                                min_n=tune(),
-                               trees=750) %>% 
+                               trees=500) %>% 
   set_engine("ranger") %>% 
   set_mode("classification")
 
@@ -90,10 +92,10 @@ forestWF <- workflow() %>%
 # create tuning grid
 forest_tuning_grid <- grid_regular(mtry(range = c(1,(ncol(bakedSet)-1))),
                                    min_n(),
-                                   levels = 100)
+                                   levels = 20)
 
 # split data for cross validation
-rfolds <- vfold_cv(train, v = 20, repeats=1)
+rfolds <- vfold_cv(train, v = 10, repeats=1)
 
 cvStart <- proc.time()
 
@@ -117,7 +119,7 @@ finalForestWF <-
   fit(data=train)
 
 # predict and export
-predict_export(finalForestWF,"ClassificationForestBalanced.csv")
+predict_export(finalForestWF,"ClassificationForest.csv")
 
 stopCluster(cl)
 
