@@ -32,7 +32,7 @@ Type 'q()' to quit R.
 ✖ dplyr::filter()  masks stats::filter()
 ✖ dplyr::lag()     masks stats::lag()
 ✖ recipes::step()  masks stats::step()
-• Use tidymodels_prefer() to resolve common conflicts.
+• Search for functions across packages at https://www.tidymodels.org/find/
 > library(tidyverse)
 ── Attaching core tidyverse packages ──────────────────────── tidyverse 2.0.0 ──
 ✔ forcats   1.0.0     ✔ readr     2.1.4
@@ -90,6 +90,7 @@ The following objects are masked from ‘package:purrr’:
 
 Loading required package: iterators
 > # library(rstanarm)
+> library(themis)
 > 
 > startTime <- proc.time()
 > 
@@ -123,7 +124,9 @@ dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
 +   step_mutate_at(all_numeric_predictors(), fn = factor) %>% 
 +   step_other(all_nominal_predictors(), threshold = .001) %>% 
 +   step_lencode_mixed(all_nominal_predictors(), outcome=vars(ACTION)) %>% 
-+   step_normalize(all_numeric_predictors())
++   step_normalize(all_numeric_predictors()) %>%
++   step_pca(all_predictors(), threshold = 0.85) %>% 
++   step_smote(all_outcomes(), neighbors=5)
 > 
 > 
 > 
@@ -149,7 +152,7 @@ dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
 [1] "Time to bake:"
 > proc.time()-prepStart
    user  system elapsed 
- 42.992   0.512  21.939 
+ 45.287   0.375  21.065 
 > 
 > # Make function to predict and export
 > predict_export <- function(workflowName, fileName){
@@ -175,7 +178,7 @@ dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
 > # Classification Forest ---------------------------------------------------
 > randForestModel <- rand_forest(mtry = tune(),
 +                                min_n=tune(),
-+                                trees=500) %>% 
++                                trees=750) %>% 
 +   set_engine("ranger") %>% 
 +   set_mode("classification")
 > 
@@ -203,8 +206,8 @@ dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
 > print("CV time:")
 [1] "CV time:"
 > proc.time()-cvStart
-    user   system  elapsed 
-   1.659    0.307 7266.623 
+     user    system   elapsed 
+    1.915     0.389 35445.492 
 > 
 > # select best model
 > best_tuneForest <- treeCVResults %>% 
@@ -217,16 +220,16 @@ dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
 +   fit(data=train)
 > 
 > # predict and export
-> predict_export(finalForestWF,"ClassificationForest.csv")
+> predict_export(finalForestWF,"ClassificationForestBalanced.csv")
 > 
 > stopCluster(cl)
 > 
 > print("total time: ")
 [1] "total time: "
 > proc.time()-startTime
-    user   system  elapsed 
- 115.247    1.765 7320.724 
+     user    system   elapsed 
+  172.718     2.918 35542.449 
 > 
 > proc.time()
-    user   system  elapsed 
- 118.590    1.976 7324.371 
+     user    system   elapsed 
+  175.880     3.082 35545.866 

@@ -7,6 +7,7 @@ library(embed)
 library(ranger)
 library(doParallel)
 # library(rstanarm)
+library(themis)
 
 startTime <- proc.time()
 
@@ -26,7 +27,9 @@ recipe.t <- recipe(ACTION ~ ., data = train) %>%
   step_mutate_at(all_numeric_predictors(), fn = factor) %>% 
   step_other(all_nominal_predictors(), threshold = .001) %>% 
   step_lencode_mixed(all_nominal_predictors(), outcome=vars(ACTION)) %>% 
-  step_normalize(all_numeric_predictors())
+  step_normalize(all_numeric_predictors()) %>%
+  step_pca(all_predictors(), threshold = 0.85) %>% 
+  step_smote(all_outcomes(), neighbors=5)
 
 
 
@@ -75,7 +78,7 @@ predict_export <- function(workflowName, fileName){
 # Classification Forest ---------------------------------------------------
 randForestModel <- rand_forest(mtry = tune(),
                                min_n=tune(),
-                               trees=500) %>% 
+                               trees=750) %>% 
   set_engine("ranger") %>% 
   set_mode("classification")
 
@@ -114,7 +117,7 @@ finalForestWF <-
   fit(data=train)
 
 # predict and export
-predict_export(finalForestWF,"ClassificationForest.csv")
+predict_export(finalForestWF,"ClassificationForestBalanced.csv")
 
 stopCluster(cl)
 
