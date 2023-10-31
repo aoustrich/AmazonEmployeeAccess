@@ -32,7 +32,7 @@ Type 'q()' to quit R.
 ✖ dplyr::filter()  masks stats::filter()
 ✖ dplyr::lag()     masks stats::lag()
 ✖ recipes::step()  masks stats::step()
-• Search for functions across packages at https://www.tidymodels.org/find/
+• Dig deeper into tidy modeling with R at https://www.tmwr.org
 > library(tidyverse)
 ── Attaching core tidyverse packages ──────────────────────── tidyverse 2.0.0 ──
 ✔ forcats   1.0.0     ✔ readr     2.1.4
@@ -122,20 +122,22 @@ dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
 > # make a new recipe to do target encoding
 > recipe.t <- recipe(ACTION ~ ., data = train) %>% 
 +   step_mutate_at(all_numeric_predictors(), fn = factor) %>% 
-+   step_other(all_nominal_predictors(), threshold = .001) %>% 
++   # step_other(all_nominal_predictors(), threshold = .001) %>% 
 +   step_lencode_mixed(all_nominal_predictors(), outcome=vars(ACTION)) %>% 
-+   step_normalize(all_numeric_predictors()) %>%
-+   step_pca(all_predictors(), threshold = 0.85) %>% 
++   step_normalize(all_numeric_predictors()) %>% 
++   step_pca(all_predictors(), threshold = 0.8) %>%
 +   step_smote(all_outcomes(), neighbors=5)
 > 
 > 
 > 
 > 
-> num_cores <- as.numeric(parallel::detectCores())#How many cores do I have?
-> if (num_cores > 4)
-+   num_cores = 20
-> cl <- makePSOCKcluster(num_cores)
+> # num_cores <- as.numeric(parallel::detectCores())#How many cores do I have?
+> # if (num_cores > 4)
+> #   num_cores = 20
+> # cl <- makePSOCKcluster(num_cores)
+> cl <- makePSOCKcluster(1)
 > doParallel::registerDoParallel(cl)
+> 
 > 
 > 
 > ## Prep and Bake
@@ -152,7 +154,7 @@ dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
 [1] "Time to bake:"
 > proc.time()-prepStart
    user  system elapsed 
- 45.287   0.375  21.065 
+ 80.219   1.085  59.343 
 > 
 > # Make function to predict and export
 > predict_export <- function(workflowName, fileName){
@@ -178,7 +180,7 @@ dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
 > # Classification Forest ---------------------------------------------------
 > randForestModel <- rand_forest(mtry = tune(),
 +                                min_n=tune(),
-+                                trees=750) %>% 
++                                trees=500) %>% 
 +   set_engine("ranger") %>% 
 +   set_mode("classification")
 > 
@@ -190,10 +192,10 @@ dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
 > # create tuning grid
 > forest_tuning_grid <- grid_regular(mtry(range = c(1,(ncol(bakedSet)-1))),
 +                                    min_n(),
-+                                    levels = 100)
++                                    levels = 20)
 > 
 > # split data for cross validation
-> rfolds <- vfold_cv(train, v = 20, repeats=1)
+> rfolds <- vfold_cv(train, v = 10, repeats=1)
 > 
 > cvStart <- proc.time()
 > 
@@ -202,12 +204,25 @@ dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
 +   tune_grid(resamples = rfolds,
 +             grid = forest_tuning_grid,
 +             metrics=metric_set(roc_auc)) 
+→ A | warning: Model failed to converge with max|grad| = 0.3452 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
+                - Rescale variables?
+There were issues with some computations   A: x1
+→ B | warning: Model failed to converge with max|grad| = 0.418681 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
+                - Rescale variables?
+There were issues with some computations   A: x1There were issues with some computations   A: x1   B: x1
+→ C | warning: Model failed to converge with max|grad| = 0.416492 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
+                - Rescale variables?, Model failed to converge with max|grad| = 0.339668 (tol = 0.002, component 1)
+There were issues with some computations   A:→ D | warning: Model failed to converge with max|grad| = 0.423231 (tol = 0.→ D | warning: Model failed to converge with max|grad| = 0.34803 (tol = 0.002, component 1), Model is nearly unidentifiable: very large eigenvalue
+                - Rescale variables?
+There were issues with some computations   A: x1   B: x1   C: x1There were issues with some computations   A: x1   B: x1   C: x1   D: x1
+There were issues with some computations   A: x1   B: x1   C: x1   D: x1
+
 > 
 > print("CV time:")
 [1] "CV time:"
 > proc.time()-cvStart
      user    system   elapsed 
-    1.915     0.389 35445.492 
+63519.358   335.543 63670.197 
 > 
 > # select best model
 > best_tuneForest <- treeCVResults %>% 
@@ -220,7 +235,7 @@ dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
 +   fit(data=train)
 > 
 > # predict and export
-> predict_export(finalForestWF,"ClassificationForestBalanced.csv")
+> predict_export(finalForestWF,"ClassificationForest.csv")
 > 
 > stopCluster(cl)
 > 
@@ -228,8 +243,42 @@ dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
 [1] "total time: "
 > proc.time()-startTime
      user    system   elapsed 
-  172.718     2.918 35542.449 
+63710.572   337.877 63799.084 
 > 
 > proc.time()
      user    system   elapsed 
-  175.880     3.082 35545.866 
+63717.491   338.281 63806.785 
+  A: x1   B: x1   C: x1   D: x1   E: x…
+There were issues with some computations   A: x1   B: x1   C: x1   D: x1   E: x…
+
+> 
+> print("CV time:")
+[1] "CV time:"
+> proc.time()-cvStart
+     user    system   elapsed 
+67918.896   381.858 71077.964 
+> 
+> # select best model
+> best_tuneForest <- treeCVResults %>% 
++   select_best("roc_auc")
+> 
+> # finalize workflow
+> finalForestWF <- 
++   forestWF %>% 
++   finalize_workflow(best_tuneForest) %>% 
++   fit(data=train)
+> 
+> # predict and export
+> predict_export(finalForestWF,"ClassificationForest.csv")
+> 
+> stopCluster(cl)
+> 
+> print("total time: ")
+[1] "total time: "
+> proc.time()-startTime
+    user   system  elapsed 
+68108.92   383.87 71203.76 
+> 
+> proc.time()
+     user    system   elapsed 
+68113.830   384.131 71209.085 

@@ -37,7 +37,7 @@ recipe.t <- recipe(ACTION ~ ., data = train) %>%
 # num_cores <- as.numeric(parallel::detectCores())#How many cores do I have?
 # if (num_cores > 4)
 #   num_cores = 20
-cl <- makePSOCKcluster(num_cores)
+# cl <- makePSOCKcluster(num_cores)
 cl <- makePSOCKcluster(1)
 doParallel::registerDoParallel(cl)
 
