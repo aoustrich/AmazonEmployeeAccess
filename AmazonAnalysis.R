@@ -22,29 +22,29 @@ train$ACTION <- as.factor(train$ACTION)
 scriptStart <- proc.time()
 
 # Recipes -----------------------------------------------------------------
-# # first recipe
+# # # first recipe
 # recipe <- recipe(ACTION ~ ., data = train) %>%
 #   step_mutate_at(all_numeric_predictors(), fn = factor) %>%
 #   step_other(all_nominal_predictors(), threshold = .01) %>%
-#   step_dummy(all_nominal_predictors())
+#   # step_dummy(all_nominal_predictors())
 # # step_lencode_mixed(all_nominal_predictors(), outcome=vars(ACTION))
 # 
 # prepped <- prep(recipe)
 # bakedSet <- bake(prepped, new_data = train)
 # 
 # # make a new recipe to do target encoding
-# recipe.t <- recipe(ACTION ~ ., data = train) %>%
-#   step_mutate_at(all_numeric_predictors(), fn = factor) %>%
-#   step_other(all_nominal_predictors(), threshold = .001) %>%
-#   step_lencode_mixed(all_nominal_predictors(), outcome=vars(ACTION)) %>%
-#   step_normalize(all_numeric_predictors())
-# 
-# 
-# ## Parallel
-# doParallel::registerDoParallel(4)
-# ## Prep and Bake
-# prepped.t <- prep(recipe.t)
-# bakedSet <- bake(prepped.t, new_data = train)
+recipe.t <- recipe(ACTION ~ ., data = train) %>%
+  step_mutate_at(all_numeric_predictors(), fn = factor) %>%
+  # step_other(all_nominal_predictors(), threshold = .001) %>%
+  step_lencode_mixed(all_nominal_predictors(), outcome=vars(ACTION)) %>%
+  step_normalize(all_numeric_predictors())
+
+
+## Parallel
+doParallel::registerDoParallel(4)
+## Prep and Bake
+prepped.t <- prep(recipe.t)
+bakedSet <- bake(prepped.t, new_data = train)
 # 
 # # Make a new recipe that uses PCA
 # 
@@ -176,11 +176,11 @@ randForestModel <- rand_forest(mtry = tune(),
 
 forestWF <- workflow() %>% 
   # add_recipe(recipe.b) %>%
-  add_recipe(recipe.bal) %>% 
+  add_recipe(recipe.t) %>% 
   add_model(randForestModel)
 
 # create tuning grid
-forest_tuning_grid <- grid_regular(mtry(range = c(1,(ncol(bakedSetbal)-1))),
+forest_tuning_grid <- grid_regular(mtry(range = c(1,(ncol(bakedSet)-1))),
                                    min_n(),
                                    levels = 10)
 
@@ -209,7 +209,7 @@ finalForestWF <-
   fit(data=train)
 
 # predict and export
-predict_export(finalForestWF,"ClassificationForestBal.csv")
+predict_export(finalForestWF,"ClassificationForest3.csv")
 
 
 
