@@ -10,12 +10,12 @@ library(naivebayes) # naive bayes
 library(kknn)
 library(kernlab) #for svm
 library(themis) # for smote balancing
-
+library(ranger)
 #workingdirectory <- getwd()
 #setwd(workingdirectory)
 
-train <- vroom("train.csv")
-test <- vroom("test.csv")
+train <- vroom("data/train.csv")
+test <- vroom("data/test.csv")
 
 train$ACTION <- as.factor(train$ACTION)
 
@@ -41,7 +41,7 @@ recipe.t <- recipe(ACTION ~ ., data = train) %>%
 
 
 ## Parallel
-doParallel::registerDoParallel(4)
+# doParallel::registerDoParallel(4)
 ## Prep and Bake
 prepped.t <- prep(recipe.t)
 bakedSet <- bake(prepped.t, new_data = train)
@@ -71,7 +71,7 @@ cl <- makePSOCKcluster(num_cores)
 doParallel::registerDoParallel(cl)
 
 ## Balanced recipe
-recipe.bal<- recipe(ACTION ~ ., data = train) %>% 
+my_recipe <- recipe(ACTION ~ ., data = train) %>% 
   step_mutate_at(all_numeric_predictors(), fn = factor) %>% 
   # step_other(all_nominal_predictors(), threshold = .001) %>% 
   step_lencode_mixed(all_nominal_predictors(), outcome=vars(ACTION)) %>% 
@@ -156,7 +156,7 @@ penalizedCV_results <- penalizedWF %>%
 
 ## Find Best Tuning Parameters
 bestTune <- penalizedCV_results %>%
-  select_best("roc_auc")
+  select_best(metric="roc_auc")
 
 ## Finalize the Workflow & fit it
 final_wf <-
@@ -189,11 +189,15 @@ rfolds <- vfold_cv(train, v = 5, repeats=1)
 
 cvStart <- proc.time()
 
+
+
+
 # run cross validation
 treeCVResults <- forestWF %>% 
   tune_grid(resamples = rfolds,
             grid = forest_tuning_grid,
-            metrics=metric_set(roc_auc)) 
+            metrics=metric_set(roc_auc),
+            control=control_grid(verbose=TRUE)) 
 
 print("CV time:")
 proc.time()-cvStart
@@ -262,7 +266,7 @@ knn_model <- nearest_neighbor(neighbors=tune()) %>%
   set_engine("kknn")
 
 knn_wf <- workflow() %>%
-  add_recipe(recipe.bal) %>%
+  add_recipe(recipe.t) %>%
   add_model(knn_model)
 
 ## set up grid of tuning values
@@ -276,10 +280,16 @@ knn_folds <- vfold_cv(train, v = 5, repeats=1)
 # doParallel::registerDoParallel(4)
 
 ## Run the CV - about 3.5 minutes
+# knn_wf <- knn_wf %>%
+#     tune_grid(resamples=knn_folds,
+#               grid=knn_tuning_grid,
+#               metrics=metric_set(roc_auc))
+start <- Sys.time()
 knn_CVresults <- knn_wf %>%
   tune_grid(resamples=knn_folds,
             grid=knn_tuning_grid,
             metrics=metric_set(roc_auc))
+print(Sys.time()-start)
 
 ## find best tuning parameters
 KNNbestTune <- knn_CVresults %>%
