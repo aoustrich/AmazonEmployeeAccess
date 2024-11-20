@@ -2,26 +2,31 @@ library(tidyverse)
 library(tidyverse)
 library(embed)
 library(dbarts)
+library(vroom)
 
 train <- vroom::vroom("data/train.csv")
 test <- vroom::vroom("data/test.csv")
 
 train$ACTION <- as.factor(train$ACTION)
 
-# Make function to get predictions, prep for kaggle, and export the data
+# Make function to predict and export
 predict_export <- function(workflowName, fileName){
   # make predictions and prep data for Kaggle format
-  x <- predict(workflowName,new_data=test) %>%
-    bind_cols(., test) %>% 
-    select(datetime, .pred) %>% 
-    rename(count=.pred) %>% 
-    mutate(
-      count=exp(count),
-      count=pmax(1, count)
-    ) %>% 
-    mutate(datetime=as.character(format(datetime)))
   
-  vroom::vroom_write(x, file=fileName,delim=',')
+  preds <- workflowName %>%
+    predict(new_data = test, type="prob")
+  
+  submission <- preds %>% 
+    mutate(id=row_number()) %>% 
+    rename(Action = .pred_1) %>% 
+    select(3,2)
+  
+  directory = "./TA_submissions/"
+  path = paste0(directory,fileName)
+  
+  vroom_write(submission, file = path, delim=',')
+  
+  
 }
 
 # Recipe
