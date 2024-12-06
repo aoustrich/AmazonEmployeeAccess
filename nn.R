@@ -1,8 +1,8 @@
 library(tidyverse)
-library(tidyverse)
+library(tidymodels)
 library(vroom)
 # library(embed)
-
+library(keras)
 
 train <- vroom::vroom("data/train.csv")
 test <- vroom::vroom("data/test.csv")
@@ -73,7 +73,7 @@ tuned_nn <- nn_wf %>%
 
 #   find best tune
 nn_bestTune <- tuned_nn %>%
-  select_best("roc_auc")
+  select_best(metric = "roc_auc")
 
 #   finalize the Workflow & fit it
 final_nn_wf <- nn_wf %>%

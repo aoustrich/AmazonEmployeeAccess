@@ -1,0 +1,166 @@
+
+R version 4.4.2 (2024-10-31) -- "Pile of Leaves"
+Copyright (C) 2024 The R Foundation for Statistical Computing
+Platform: x86_64-pc-linux-gnu
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+  Natural language support but running in an English locale
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+> library(tidyverse)
+── Attaching core tidyverse packages ──────────────────────── tidyverse 2.0.0 ──
+✔ dplyr     1.1.4     ✔ readr     2.1.5
+✔ forcats   1.0.0     ✔ stringr   1.5.1
+✔ ggplot2   3.5.1     ✔ tibble    3.2.1
+✔ lubridate 1.9.3     ✔ tidyr     1.3.1
+✔ purrr     1.0.2     
+── Conflicts ────────────────────────────────────────── tidyverse_conflicts() ──
+✖ dplyr::filter() masks stats::filter()
+✖ dplyr::lag()    masks stats::lag()
+ℹ Use the conflicted package (<http://conflicted.r-lib.org/>) to force all conflicts to become errors
+> library(tidymodels)
+── Attaching packages ────────────────────────────────────── tidymodels 1.2.0 ──
+✔ broom        1.0.7     ✔ rsample      1.2.1
+✔ dials        1.3.0     ✔ tune         1.2.1
+✔ infer        1.0.7     ✔ workflows    1.1.4
+✔ modeldata    1.4.0     ✔ workflowsets 1.1.0
+✔ parsnip      1.2.1     ✔ yardstick    1.3.1
+✔ recipes      1.1.0     
+── Conflicts ───────────────────────────────────────── tidymodels_conflicts() ──
+✖ scales::discard() masks purrr::discard()
+✖ dplyr::filter()   masks stats::filter()
+✖ recipes::fixed()  masks stringr::fixed()
+✖ dplyr::lag()      masks stats::lag()
+✖ yardstick::spec() masks readr::spec()
+✖ recipes::step()   masks stats::step()
+• Learn how to get started at https://www.tidymodels.org/start/
+> library(embed)
+> library(dbarts)
+
+Attaching package: ‘dbarts’
+
+The following object is masked from ‘package:parsnip’:
+
+    bart
+
+The following object is masked from ‘package:tidyr’:
+
+    extract
+
+> library(vroom)
+
+Attaching package: ‘vroom’
+
+The following object is masked from ‘package:yardstick’:
+
+    spec
+
+The following object is masked from ‘package:scales’:
+
+    col_factor
+
+The following objects are masked from ‘package:readr’:
+
+    as.col_spec, col_character, col_date, col_datetime, col_double,
+    col_factor, col_guess, col_integer, col_logical, col_number,
+    col_skip, col_time, cols, cols_condense, cols_only, date_names,
+    date_names_lang, date_names_langs, default_locale, fwf_cols,
+    fwf_empty, fwf_positions, fwf_widths, locale, output_column,
+    problems, spec
+
+> 
+> train <- vroom::vroom("data/train.csv")
+Rows: 32769 Columns: 10
+── Column specification ────────────────────────────────────────────────────────
+Delimiter: ","
+dbl (10): ACTION, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTN...
+
+ℹ Use `spec()` to retrieve the full column specification for this data.
+ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+> test <- vroom::vroom("data/test.csv")
+Rows: 58921 Columns: 10
+── Column specification ────────────────────────────────────────────────────────
+Delimiter: ","
+dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
+
+ℹ Use `spec()` to retrieve the full column specification for this data.
+ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+> 
+> train$ACTION <- as.factor(train$ACTION)
+> 
+> # Make function to predict and export
+> predict_export <- function(workflowName, fileName){
++   # make predictions and prep data for Kaggle format
++   
++   preds <- workflowName %>%
++     predict(new_data = test, type="prob")
++   
++   submission <- preds %>% 
++     mutate(id=row_number()) %>% 
++     rename(Action = .pred_1) %>% 
++     select(3,2)
++   
++   directory = "./TA_submissions/"
++   path = paste0(directory,fileName)
++   
++   vroom_write(submission, file = path, delim=',')
++   
++   
++ }
+> 
+> # Recipe
+> recipe <- recipe(ACTION ~ ., data = train) %>%
++   step_mutate_at(all_numeric_predictors(), fn = factor) %>%
++   step_other(all_nominal_predictors(), threshold = .001) %>%
++  # step_lencode_mixed(all_nominal_predictors(), outcome=vars(ACTION)) %>%
++   step_dummy(all_nominal_predictors()) %>% 
++   step_normalize(all_numeric_predictors())
+> 
+> # Model
+> 
+> bartModel <- parsnip::bart(mode = "classification",
++                            engine='dbarts',trees = tune())
+> 
+> bartWF <- workflow() %>% 
++   add_recipe(recipe) %>%
++   add_model(bartModel) 
+> 
+> #   tuning grid
+> grid <- grid_regular(trees(),
++                           levels = 20)
+> # folds
+> folds <- vfold_cv(train, v=10, repeats=1)
+> 
+> 
+> bartResultsCV <- bartWF %>% 
++   tune_grid(resamples=folds,
++             grid=grid,
++             metrics=metric_set(roc_auc))
+> 
+> #   find best tune
+> bartBestTune <- bartResultsCV %>%
++   select_best(metric = "roc_auc")
+> 
+> #   finalize the Workflow & fit it
+> bartFinalWF <- bartWF %>%
++   finalize_workflow(bartBestTune) %>%
++   fit(data=train)
+> 
+> ## ADD TUNING GRID ?? 
+> # metrics=metric_set(roc_auc)
+> 
+> predict_export(bartFinalWF,"bart_1.csv")
+> 
+> proc.time()
+      user     system    elapsed 
+ 97175.377   1322.386 178143.791 

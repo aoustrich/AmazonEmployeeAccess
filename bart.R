@@ -1,5 +1,5 @@
 library(tidyverse)
-library(tidyverse)
+library(tidymodels)
 library(embed)
 library(dbarts)
 library(vroom)
@@ -33,16 +33,17 @@ predict_export <- function(workflowName, fileName){
 recipe <- recipe(ACTION ~ ., data = train) %>%
   step_mutate_at(all_numeric_predictors(), fn = factor) %>%
   step_other(all_nominal_predictors(), threshold = .001) %>%
-  step_lencode_mixed(all_nominal_predictors(), outcome=vars(ACTION)) %>%
+ # step_lencode_mixed(all_nominal_predictors(), outcome=vars(ACTION)) %>%
+  step_dummy(all_nominal_predictors()) %>% 
   step_normalize(all_numeric_predictors())
 
 # Model
 
-bartModel <- parsnip::bart(mode = "regression",
+bartModel <- parsnip::bart(mode = "classification",
                            engine='dbarts',trees = tune())
 
 bartWF <- workflow() %>% 
-  add_recipe(my_recipe) %>%
+  add_recipe(recipe) %>%
   add_model(bartModel) 
 
 #   tuning grid
@@ -59,7 +60,7 @@ bartResultsCV <- bartWF %>%
 
 #   find best tune
 bartBestTune <- bartResultsCV %>%
-  select_best("roc_auc")
+  select_best(metric = "roc_auc")
 
 #   finalize the Workflow & fit it
 bartFinalWF <- bartWF %>%

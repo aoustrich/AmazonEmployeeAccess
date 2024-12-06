@@ -1,5 +1,5 @@
 library(tidyverse)
-library(tidyverse)
+library(tidymodels)
 library(embed)
 library(bonsai) # boosted trees & bart
 library(lightgbm) # boosted trees
@@ -17,9 +17,9 @@ predict_export <- function(workflowName, fileName){
   preds <- workflowName %>%
     predict(new_data = test, type="prob")
   
-  submission <- preds %>% 
-    mutate(id=row_number()) %>% 
-    rename(Action = .pred_1) %>% 
+  submission <- preds %>%
+    mutate(id=row_number()) %>%
+    rename(Action = .pred_1) %>%
     select(3,2)
   
   directory = "./TA_submissions/"
@@ -65,7 +65,7 @@ boostResultsCV <- boostWF %>%
 
 #   find best tune
 boostBestTune <- boostResultsCV %>%
-  select_best("roc_auc")
+  select_best(metric = "roc_auc")
 
 #   finalize the Workflow & fit it
 boostFinalWF <- boostWF %>%
